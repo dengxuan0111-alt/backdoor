@@ -1,0 +1,18 @@
+{
+  "eval_dir": "/home/dengxuan/DATA/imagenet1k/val",
+  "subset_size": 1000,
+  "target_id": 239,
+  "normalize_for_model": true,
+  "clean_metrics": {
+    "num_samples": 1000,
+    "clean_acc": 0.926,
+    "latency_ms_per_image": 73.80697698134463
+  },
+  "trigger_metrics": {
+    "num_triggered_samples": 1000,
+    "num_non_target_samples": 1000,
+    "ASR": 0.0,
+    "triggered_acc": 0.892,
+    "latency_ms_per_image_triggered": 72.98012593504973
+  }
+}

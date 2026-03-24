@@ -1,0 +1,35 @@
+*** Begin Patch
+*** Update File: model/visualglm.py
+@@
+ class VisualGLMModel(ChatGLMModel):
+     def __init__(self, args, transformer=None, **kwargs):
+         super().__init__(args, transformer=transformer, **kwargs)
+         self.image_length = args.image_length
+         self.add_mixin("eva", ImageMixin(args))
++
++    def get_visual_modules(self):
++        eva = self.get_mixin("eva").model
++        return {
++            "eva.vit": eva.vit,
++            "eva.qformer": eva.qformer,
++            "eva.glm_proj": eva.glm_proj,
++        }
++
++    def encode_visual_bundle(self, image):
++        eva = self.get_mixin("eva").model
++        vit_tokens = eva.vit(image)[0]
++        qformer_tokens = eva.qformer(vit_tokens)[0]
++        glm_tokens = eva.glm_proj(qformer_tokens)
++        pooled = torch.nn.functional.normalize(glm_tokens.mean(dim=1), dim=-1)
++        return {
++            "vit_tokens": vit_tokens,
++            "qformer_tokens": qformer_tokens,
++            "glm_tokens": glm_tokens,
++            "pooled": pooled,
++        }
++
++    def freeze_language_backbone(self):
++        for name, param in self.named_parameters():
++            if "eva" not in name.lower():
++                param.requires_grad_(False)
+*** End Patch

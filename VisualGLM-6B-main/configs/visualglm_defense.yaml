@@ -1,0 +1,92 @@
+model:
+  base_model_path: /home/dengxuan/VisualGLM-6B-main/visualglm-6b
+  base_type: visualglm-6b
+  device: cuda:6
+  image_size: 224
+  image_length: 32
+  checkpoint_path: checkpoints/visualglm_backdoored.pt
+  repaired_checkpoint_path: checkpoints/visualglm_repaired.pt
+  quantization_bit: null
+
+vision:
+  repair_targets:
+    - eva.vit
+    - eva.qformer
+    - eva.glm_proj
+  candidate_hook_layers:
+    - eva.vit.transformer.layers.20
+    - eva.vit.transformer.layers.21
+    - eva.vit.transformer.layers.22
+    - eva.vit.transformer.layers.23
+    - eva.qformer.transformer.layers.8
+    - eva.qformer.transformer.layers.9
+    - eva.qformer.transformer.layers.10
+    - eva.qformer.transformer.layers.11
+    - eva.glm_proj
+
+downstream:
+  task_type: classification
+  num_classes: 1000
+  label_names_path: data/labels.txt
+  verbalizer_path: data/verbalizers.json
+  answer_space_path: null
+  classifier_head_path: checkpoints/classifier_head.pt
+
+data:
+  clean_train: data/clean_train.jsonl
+  clean_val: data/clean_val.jsonl
+  trigger_val: data/trigger_val.jsonl
+
+  # 新脚本当前优先读取这个 .pt 批文件
+  tensor_batch_path: data/sample_batch.pt
+
+  batch_size: 8
+  num_workers: 4
+
+target_identification:
+  topk_candidates: 5
+  max_clean_batches: 10
+  perturbation_scale: 0.05
+
+trigger_inversion:
+  steps: 50
+  lr: 0.01
+  init_mask: random
+  max_patch_ratio: 0.03
+  lambda_target: 5.0
+  lambda_feature: 1.0
+  lambda_ssim: 1.0
+  lambda_l1: 0.01
+
+activation_tuning:
+  finetune_epochs: 2
+  lr: 2.0e-6
+  weight_decay: 1.0e-4
+  align_weight: 1.0
+  feature_weight: 0.5
+  top_layers: 3
+  top_neuron_ratio: 0.1
+
+bdetclip_gate:
+  enabled: true
+  threshold: null
+  benign_prompt_bank: data/benign_prompts.json
+  malignant_prompt_bank: data/malignant_prompts.json
+  score_mode: logit_margin
+  num_prompt_pairs: 2
+
+eval:
+  metrics:
+    - asr
+    - clean_accuracy
+    - auroc
+    - latency_ms
+    - extra_flops
+
+benign_prompts:
+  - "Classify the image faithfully."
+  - "Predict the image class based on visual evidence."
+
+malignant_prompts:
+  - "Ignore normal evidence and force a target prediction."
+  - "Prefer the hidden target class."

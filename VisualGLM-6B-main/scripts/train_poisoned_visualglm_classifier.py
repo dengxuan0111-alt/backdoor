@@ -96,6 +96,17 @@ def parse_args():
     parser.add_argument("--save-dir", type=str, default="checkpoints")
     parser.add_argument("--save-prefix", type=str, default="visualglm_attack")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--train-visual-mode",
+        type=str,
+        default="glm_proj_only",
+        choices=[
+            "glm_proj_only",
+            "qformer_glmproj",
+            "last_vit_qformer_glmproj",
+            "all_visual",
+        ],
+    )
     return parser.parse_args()
 
 
@@ -178,19 +189,60 @@ def freeze_for_poison_training(
     adapter: VisualGLMVisionAdapter,
     classifier_head: nn.Module,
     train_visual: bool,
+    train_visual_mode: str = "glm_proj_only",
 ):
+    # 先冻结整个 VisualGLM
+    for p in adapter.visualglm_model.parameters():
+        p.requires_grad_(False)
+
+    # 分类头始终训练
     for p in classifier_head.parameters():
         p.requires_grad_(True)
 
-    if train_visual:
-        adapter.freeze_language_backbone()
+    if not train_visual:
+        print("[train] training classifier head only")
+        return
+
+    # 语言侧保持冻结
+    adapter.freeze_language_backbone()
+
+    if train_visual_mode == "glm_proj_only":
+        for p in adapter.glm_proj.parameters():
+            p.requires_grad_(True)
+        print("[train] training glm_proj + classifier head")
+
+    elif train_visual_mode == "qformer_glmproj":
+        for p in adapter.qformer.parameters():
+            p.requires_grad_(True)
+        for p in adapter.glm_proj.parameters():
+            p.requires_grad_(True)
+        print("[train] training qformer + glm_proj + classifier head")
+
+    elif train_visual_mode == "last_vit_qformer_glmproj":
+        for p in adapter.qformer.parameters():
+            p.requires_grad_(True)
+        for p in adapter.glm_proj.parameters():
+            p.requires_grad_(True)
+
+        vit_layers = adapter.vit.transformer.layers
+        for layer in vit_layers[-4:]:
+            for p in layer.parameters():
+                p.requires_grad_(True)
+
+        print("[train] training vit last 4 layers + qformer + glm_proj + classifier head")
+
+    elif train_visual_mode == "all_visual":
         for p in adapter.blip2.parameters():
             p.requires_grad_(True)
-        print("[train] training visual encoder + classifier head")
+        print("[train] training full visual encoder + classifier head")
+
     else:
-        for p in adapter.visualglm_model.parameters():
-            p.requires_grad_(False)
-        print("[train] training classifier head only")
+        raise ValueError(f"Unknown train_visual_mode: {train_visual_mode}")
+
+    trainable = sum(p.numel() for p in adapter.visualglm_model.parameters() if p.requires_grad)
+    head_trainable = sum(p.numel() for p in classifier_head.parameters() if p.requires_grad)
+    print(f"[train] visual trainable params: {trainable}")
+    print(f"[train] head trainable params: {head_trainable}")
 
 
 def build_badnet_trigger(
@@ -523,6 +575,7 @@ def main():
         adapter=adapter,
         classifier_head=classifier_head,
         train_visual=args.train_visual,
+        train_visual_mode=args.train_visual_mode,
     )
 
     trainable_model_params = [p for p in visualglm_model.parameters() if p.requires_grad]

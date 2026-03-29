@@ -384,10 +384,12 @@ def build_task_forward(
         model_input = model_input.to(device=vit_param.device, dtype=vit_param.dtype)
 
         feat = adapter.encode_image_embedding(model_input, detach=False)
-        feat = torch.nan_to_num(feat.float(), nan=0.0, posinf=1e4, neginf=-1e4)
-
-        logits = classifier_head(feat)
-        logits = torch.nan_to_num(logits, nan=0.0, posinf=1e4, neginf=-1e4)
+        if not torch.isfinite(feat).all():
+            raise FloatingPointError("Non-finite feature detected")
+        
+        logits = classifier_head(feat.float())
+        if not torch.isfinite(logits).all():
+            raise FloatingPointError("Non-finite logits detected")
         return logits
 
     return forward_fn

@@ -18,5 +18,7 @@ python scripts/train_poisoned_visualglm_classifier.py \
   --init-classifier-head-path checkpoints/classifier_head.pt \
   --save-dir checkpoints \
   --save-prefix imagenet_badnet_t239
+  --train-visual \
+  --train-visual-mode glm_proj_only
 
   #目前都是训练一个epoch
